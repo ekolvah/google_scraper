@@ -15,13 +15,13 @@ jobs:
         with:
           python-version: '3.x'
       - name: Install dependencies
-        run: pip install selenium
+        run: pip install newspaper3k
       - name: Install dependencies
         run: pip install bs4
       - name: Install dependencies
         run: pip install requests
       - name: Install dependencies
-        run: pip install --upgrade pandas
+        run: pip install gnews
       - name: Install dependencies
         run: pip install openpyxl
       - name: Install dependencies
