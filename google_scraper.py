@@ -1,6 +1,3 @@
-from bs4 import BeautifulSoup
-import pandas as pd
-import requests
 from gnews import GNews
 from newspaper import Article
 import newspaper.article
@@ -49,6 +46,7 @@ def sentiment_analysis(articles):
          pass
         
     compound_mean = compound_sum / len(articles)
+    print('Тональность статей: ' + str(compound_mean))
     if compound_mean > 0.05:
         print("Тональность статей: положительная")
     elif compound_mean < -0.05:
