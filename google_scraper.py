@@ -9,7 +9,7 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import sys
 
 def google_scraper():
-    #nltk.download("vader_lexicon")
+    nltk.download("vader_lexicon")
     keywords = ['nvidia', 'stock']
     date_from = '01/01/20233' 
     date_to = '02/01/20233'
