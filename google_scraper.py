@@ -13,10 +13,7 @@ google_news = GNews()
 def google_scraper():
     worksheet = get_sheet().get_worksheet(0)
     nltk.download("vader_lexicon")
-    keywords = ['nvidia stock articles']
-    date_from = '01/01/20233' 
-    date_to = '02/01/20233'
-    articles = news_search(keywords, date_from, date_to)
+    articles = news_search()
     result_of_analysis = sentiment_analysis(articles)
     save_sentiment_analysis(worksheet, result_of_analysis)
 
@@ -32,7 +29,8 @@ def get_sheet():
 def save_sentiment_analysis(worksheet, result_of_analysis):
     worksheet.update(values=result_of_analysis.values.tolist(), range_name=None)
 
-def news_search(keywords, date_from, date_to):
+def news_search():
+    keywords = ['nvidia stock articles']
     google_news.period = '1d'
     for keyword in keywords:
       articles = google_news.get_news(keyword)
@@ -45,15 +43,13 @@ def sentiment_analysis(articles):
     compound_sum = 0
     for article in articles:
         url = article['url']
-        #print(url)
         article_obj = google_news.get_full_article(url)
         if article_obj is not None:
             article_text = google_news.get_full_article(url).text
             downloaded +=1
             scores = analyzer.polarity_scores(article_text)
-            #print(scores)
             compound_sum += scores["compound"]
-            data.append([str(article['published date']), str(article['publisher']), str(article['title'])])
+            data.append([str(article['published date']), str(article['publisher']), str(article['title']), str(scores["compound"])])
         else:   
             continue
     print('Количество статей обработано ' + str(len(articles)))
@@ -69,7 +65,7 @@ def sentiment_analysis(articles):
     percentage = round(100*downloaded/len(articles))
     print("percentage of downloaded articles=" + str(percentage) + '%')
     
-    result_of_analysis = pd.DataFrame(data, columns=['published date', 'publisher', 'title'])
+    result_of_analysis = pd.DataFrame(data, columns=['published date', 'publisher', 'title', 'compound'])
     return result_of_analysis
 
 google_scraper()
