@@ -15,13 +15,7 @@ jobs:
         with:
           python-version: '3.x'
       - name: Install dependencies
-        run: pip install gnews
-      - name: Install dependencies
-        run: pip install openpyxl
-      - name: Install dependencies
-        run: pip install gspread
-      - name: Install dependencies
-        run: pip install oauth2client
+        run: pip install -r requirements.txt
 
       - name: Run script
         run: python google_scraper.py
