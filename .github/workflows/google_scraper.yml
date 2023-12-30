@@ -19,3 +19,5 @@ jobs:
 
       - name: Run script
         run: python google_scraper.py
+env:
+  CREDENTIALS: ${{ secrets.CREDENTIALS }}
