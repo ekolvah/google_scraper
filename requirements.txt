@@ -1,0 +1,4 @@
+gnews
+openpyxl
+gspread
+oauth2client
