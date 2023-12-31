@@ -8,3 +8,5 @@ gspread
 pandas
 matplotlib
 yfinance
+YahooFinancials
+yahoo_fin

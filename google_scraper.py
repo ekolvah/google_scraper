@@ -10,6 +10,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import yfinance as yf
 from datetime import datetime, timedelta
+from yahoofinancials import YahooFinancials
+from yahoo_fin import stock_info as si
 
 google_news = GNews()
 DAYS = 30
@@ -17,23 +19,60 @@ DAYS = 30
 def google_scraper():
     worksheet = get_sheet().get_worksheet(0)
     nltk.download("vader_lexicon")
-    articles = news_search()
-    sentiment_analysis_of_articles = get_sentiment_analysis_of_articles(articles)
-    save_sentiment_analysis(worksheet, sentiment_analysis_of_articles)
-    #sentiment_analysis_of_articles = read_sentiment_analysis(worksheet)
-    sentiment_analiisys_per_day = sentiment_analysis_of_articles.groupby('published date')['compound'].mean().reset_index()
+    #articles = news_search()
+    #sentiment_analysis_of_articles = get_sentiment_analysis_of_articles(articles)
+    #save_sentiment_analysis(worksheet, sentiment_analysis_of_articles)
+    sentiment_analysis_of_articles = read_sentiment_analysis(worksheet)
+    sentiment_analiisys_per_day = sentiment_analysis_of_articles.groupby('published date')['compound'].mean().reset_index().sort_values('published date')
     print(sentiment_analiisys_per_day)
     print_stock(sentiment_analiisys_per_day)
+    print_revenue(datetime.now().date() - timedelta(days=365), datetime.now().date())  
 
 def read_sentiment_analysis(worksheet):
     sentiment_analysis = worksheet.get_all_values()
+    # Преобразование списка списков в датафрейм, где первый список - заголовки столбцов
     sentiment_analysis = pd.DataFrame(sentiment_analysis[1:], columns=sentiment_analysis[0])
-    
+    # Преобразование столбца 'published date' в datetime
+    sentiment_analysis['published date'] = pd.to_datetime(sentiment_analysis['published date'])
     # Преобразование данных в столбце 'compound' в числа
     sentiment_analysis['compound'] = pd.to_numeric(sentiment_analysis['compound'].str.replace(',', '.'), errors='coerce')
     
     return sentiment_analysis
 
+def print_revenue(start_date, end_date):
+    ticker = 'NVDA'
+    yahoo_financials = YahooFinancials(ticker)
+
+    income_statement = yahoo_financials.get_financial_stmts('quarterly', 'income')
+    reports = income_statement['incomeStatementHistoryQuarterly'][ticker]
+        
+    analysts_info = si.get_analysts_info(ticker)
+    earnings_estimate = analysts_info['Revenue Estimate']
+    print(earnings_estimate)
+
+
+    dates = []
+    revenues = []
+    for report in reports:
+        for date_str in report:
+            date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            if start_date <= date <= end_date:
+                if 'operatingRevenue' in report[date_str]:  
+                    dates.append(date)
+                    # преобразуем выручку в миллиарды
+                    revenue_billion = report[date_str]['operatingRevenue'] / 1_000_000_000
+                    revenues.append(revenue_billion)
+    print(dates)
+    print([f'{revenue:.2f}B' for revenue in revenues])
+    #очистить значения на графике
+    plt.cla()
+    plt.bar(dates, revenues, color='green', width=20)
+    plt.xticks(dates)  
+    plt.xlabel('Date')
+    plt.ylabel('Revenue (in billions)')
+    plt.title('Quarterly Revenue')
+    plt.savefig('revenue.png')
+        
 def print_stock(sentiment_data):
     # Задаем начальную и конечную дату
     end = datetime.now().date()
@@ -122,10 +161,9 @@ def get_sentiment_analysis_of_articles(articles):
             compound_sum += scores["compound"]
             # Преобразование строки даты и времени в объект datetime
             date_time_obj = datetime.strptime(article['published date'], '%a, %d %b %Y %H:%M:%S %Z')
-            # Форматирование объекта datetime обратно в строку, содержащую только дату
-            date_str = date_time_obj.strftime('%a, %d %b %Y')
-            
-            data.append([date_str, str(article['publisher']), str(article['title']), float(scores["compound"])])
+            # Удаление информации о времени, сохранение только даты
+            date_time_obj = date_time_obj.date()
+            data.append([date_time_obj, str(article['publisher']), str(article['title']), float(scores["compound"])])
         else:   
             continue
     print('Количество статей обработано ' + str(len(articles)))
