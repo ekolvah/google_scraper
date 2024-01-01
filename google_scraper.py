@@ -15,21 +15,22 @@ import matplotlib.dates as mdates
 
 google_news = GNews()
 DATE_FORMAT = '%Y-%b-%d'
-TICKET = 'NVDA'
+TICKET = 'MSFT'
+KEYWORDS = ['microsoft stock articles']
+START_DATE = datetime.strptime('2023-Jul-18', DATE_FORMAT)
+END_DATE = datetime.strptime('2023-Sep-01', DATE_FORMAT)
 
 def google_scraper():
-    start_date = datetime.strptime('2023-Oct-15', DATE_FORMAT)
-    end_date = datetime.strptime('2023-Nov-15', DATE_FORMAT)
     worksheet = get_sheet().get_worksheet(0)
     nltk.download("vader_lexicon")
-    #articles = news_search(start_date, end_date)
-    #sentiment_analysis_of_articles = get_sentiment_analysis_of_articles(articles)
-    #save_sentiment_analysis(worksheet, sentiment_analysis_of_articles)
+    articles = news_search()
+    sentiment_analysis_of_articles = get_sentiment_analysis_of_articles(articles)
+    save_sentiment_analysis(worksheet, sentiment_analysis_of_articles)
     sentiment_analysis_of_articles = read_sentiment_analysis(worksheet)
     sentiment_analiisys_per_day = sentiment_analysis_of_articles.groupby('published date')['compound'].mean().reset_index().sort_values('published date')
     #print(sentiment_analiisys_per_day)
-    print_stock_prices(sentiment_analiisys_per_day, start_date, end_date)
-    print_revenue(start_date, end_date)  
+    print_stock_prices(sentiment_analiisys_per_day)
+    print_revenue()  
 
 def read_sentiment_analysis(worksheet):
     sentiment_analysis = worksheet.get_all_values()
@@ -42,7 +43,7 @@ def read_sentiment_analysis(worksheet):
     
     return sentiment_analysis
 
-def print_revenue(start_date, end_date):
+def print_revenue():
     yahoo_financials = YahooFinancials(TICKET)
 
     analysts_info = si.get_analysts_info(TICKET)
@@ -66,7 +67,7 @@ def print_revenue(start_date, end_date):
     for report in incomeStatementHistoryQuarterly:
         for date_str in report:
             date = datetime.strptime(date_str, '%Y-%m-%d')
-            if start_date.year <= date.year <= end_date.year and 'operatingRevenue' in report[date_str]:
+            if START_DATE.year <= date.year <= END_DATE.year and 'operatingRevenue' in report[date_str]:
                 revenue_billion = report[date_str]['operatingRevenue'] / 1_000_000_000
                 data.append((date, revenue_billion))
 
@@ -90,27 +91,27 @@ def print_revenue(start_date, end_date):
     plt.title('Quarterly Revenue')
     plt.savefig('revenue.png')
     
-def print_stock_prices(sentiment_data, start_date, end_date):
-    # Получаем данные о ценах акций nvidia
-    nvda = yf.download(TICKET, start_date, end_date, interval="1d")
+def print_stock_prices(sentiment_data):
+    # Получаем данные о ценах акций 
+    tckt = yf.download(TICKET, START_DATE, END_DATE, interval="1d")
 
-    # Нарисовываем график цен акций nvidia
-    plt.plot(nvda.index, nvda["Close"], label=TICKET)
+    # Нарисовываем график цен акций 
+    plt.plot(tckt.index, tckt["Close"], label=TICKET)
 
     # Добавляем результаты анализа тональности на график
     for index, row in sentiment_data.iterrows():
         date = pd.to_datetime(row['published date'])
-        if start_date <= date <= end_date:
-            if date.strftime(DATE_FORMAT) in nvda.index:
+        if START_DATE <= date <= END_DATE:
+            if date.strftime(DATE_FORMAT) in tckt.index:
                 compound = float(row['compound'])
                 color = 'g' if compound > 0.05 else 'r' if compound < -0.05 else 'b'
-                plt.scatter(date, nvda.loc[date.strftime(DATE_FORMAT)]["Close"], c=color)
+                plt.scatter(date, tckt.loc[date.strftime(DATE_FORMAT)]["Close"], c=color)
     # Устанавливаем интервал между метками на оси X
     plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter(DATE_FORMAT))
 
     #plt.xticks(nvda.index)
-    plt.title("Цены акций nvidia за 2021 год")
+    plt.title("Цены акций " + TICKET + " и результаты анализа тональности новостей")
     plt.xlabel("Дата")
     plt.ylabel("Цена")
     plt.legend()
@@ -135,19 +136,17 @@ def save_sentiment_analysis(worksheet, sentiment_analysis):
     # Сохраняем данные в Google Sheets
     worksheet.update(data_with_headers)
 
-def news_search(start_date, end_date):
+def news_search():
     # Получение списка дат в формате (год, месяц, день) так чтобы между датами был интервал в 2 дня
-    dates = [start_date + timedelta(days=i) for i in range((end_date-start_date).days + 1)]
+    dates = [START_DATE + timedelta(days=i) for i in range((END_DATE-START_DATE).days + 1)]
     dates = [(date.year, date.month, date.day) for date in dates]  
-
-    keywords = ['nvidia stock articles']
 
     articles = []
     for i in range(len(dates) - 2):
         start_date = dates[i]
         end_date = dates[i + 2]
         print(start_date, end_date)
-        articles += news_search_for_dates(start_date, end_date, keywords)
+        articles += news_search_for_dates(start_date, end_date, KEYWORDS)
     
     # Удаление дубликатов
     articles = [json.loads(article) for article in set(json.dumps(article) for article in articles)]
@@ -155,7 +154,7 @@ def news_search(start_date, end_date):
     return articles
 
 def news_search_for_dates(start_date, end_date, keywords):
-    google_news.start_date = start_date
+    google_news.start_date = start_date 
     google_news.end_date = end_date
     articles = []
     for keyword in keywords:
