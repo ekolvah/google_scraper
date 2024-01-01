@@ -66,7 +66,7 @@ def print_revenue(start_date, end_date):
     for report in reports:
         for date_str in report:
             date = datetime.strptime(date_str, '%Y-%m-%d')
-            if start_date.year == date.year and (start_date.month - 1) // 3 == (date.month - 1) // 3 and 'operatingRevenue' in report[date_str]:
+            if start_date.year <= date.year <= end_date.year and 'operatingRevenue' in report[date_str]:
                 revenue_billion = report[date_str]['operatingRevenue'] / 1_000_000_000
                 data.append((date, revenue_billion))
 
@@ -81,11 +81,10 @@ def print_revenue(start_date, end_date):
     if not df.empty:
         plt.bar(df['Date'], df['Revenue'], color='green', width=20)
         # чтобы на графике были даты только за те данные которые есть
-        plt.xticks([df['Date'].min()])
-        plt.xlim(df['Date'].min() - pd.Timedelta(days=1), df['Date'].min() + pd.Timedelta(days=1))
+        plt.xticks(df['Date'])
+        plt.xlim(df['Date'].min() - pd.Timedelta(days=1), df['Date'].max() + pd.Timedelta(days=1))
         # Установка форматтера для оси X
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter(DATE_FORMAT))
-        plt.gca().xaxis.set_major_locator(mdates.DayLocator())
     plt.xlabel('Date')
     plt.ylabel('Revenue (in billions)')
     plt.title('Quarterly Revenue')
@@ -137,6 +136,7 @@ def save_sentiment_analysis(worksheet, sentiment_analysis):
     worksheet.update(data_with_headers)
 
 def news_search(start_date, end_date):
+    # Получение списка дат в формате (год, месяц, день) так чтобы между датами был интервал в 2 дня
     dates = [start_date + timedelta(days=i) for i in range((end_date-start_date).days + 1)]
     dates = [(date.year, date.month, date.day) for date in dates]  
 
