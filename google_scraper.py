@@ -15,6 +15,7 @@ import matplotlib.dates as mdates
 
 google_news = GNews()
 DATE_FORMAT = '%Y-%b-%d'
+TICKET = 'NVDA'
 
 def google_scraper():
     start_date = datetime.strptime('2023-Oct-15', DATE_FORMAT)
@@ -42,10 +43,9 @@ def read_sentiment_analysis(worksheet):
     return sentiment_analysis
 
 def print_revenue(start_date, end_date):
-    ticker = 'NVDA'
-    yahoo_financials = YahooFinancials(ticker)
+    yahoo_financials = YahooFinancials(TICKET)
 
-    analysts_info = si.get_analysts_info(ticker)
+    analysts_info = si.get_analysts_info(TICKET)
     
     pd.set_option('display.max_columns', None)
     pd.set_option('display.expand_frame_repr', False)
@@ -60,10 +60,10 @@ def print_revenue(start_date, end_date):
 
 
     income_statement = yahoo_financials.get_financial_stmts('quarterly', 'income')
-    reports = income_statement['incomeStatementHistoryQuarterly'][ticker]
+    incomeStatementHistoryQuarterly = income_statement['incomeStatementHistoryQuarterly'][TICKET]
 
     data = []
-    for report in reports:
+    for report in incomeStatementHistoryQuarterly:
         for date_str in report:
             date = datetime.strptime(date_str, '%Y-%m-%d')
             if start_date.year <= date.year <= end_date.year and 'operatingRevenue' in report[date_str]:
@@ -71,7 +71,7 @@ def print_revenue(start_date, end_date):
                 data.append((date, revenue_billion))
 
     # Создаем DataFrame из списка кортежей
-    df = pd.DataFrame(data, columns=['Date', 'Revenue'])
+    df = pd.DataFrame(data, columns=['Date', 'Revenue']).sort_values('Date')
 
     print('-----Revenue-----')
     print(df)
@@ -92,10 +92,10 @@ def print_revenue(start_date, end_date):
     
 def print_stock_prices(sentiment_data, start_date, end_date):
     # Получаем данные о ценах акций nvidia
-    nvda = yf.download("NVDA", start_date, end_date, interval="1d")
+    nvda = yf.download(TICKET, start_date, end_date, interval="1d")
 
     # Нарисовываем график цен акций nvidia
-    plt.plot(nvda.index, nvda["Close"], label="NVDA")
+    plt.plot(nvda.index, nvda["Close"], label=TICKET)
 
     # Добавляем результаты анализа тональности на график
     for index, row in sentiment_data.iterrows():
