@@ -9,16 +9,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import yfinance as yf
 from datetime import datetime, timedelta
-from yahoofinancials import YahooFinancials
-from yahoo_fin import stock_info as si
 import matplotlib.dates as mdates
+from bs4 import BeautifulSoup
+import requests
 
 google_news = GNews()
 DATE_FORMAT = '%Y-%b-%d'
-TICKET = 'MSFT'
-KEYWORDS = ['microsoft stock articles']
-START_DATE = datetime.strptime('2023-Jul-18', DATE_FORMAT)
-END_DATE = datetime.strptime('2023-Sep-01', DATE_FORMAT)
+TICKET = 'BTC'
+KEYWORDS = ['BTC'] 
+START_DATE = datetime.strptime('2022-Apr-01', DATE_FORMAT)
+END_DATE = datetime.strptime('2022-May-01', DATE_FORMAT)
 
 def google_scraper():
     worksheet = get_sheet().get_worksheet(0)
@@ -28,10 +28,90 @@ def google_scraper():
     save_sentiment_analysis(worksheet, sentiment_analysis_of_articles)
     sentiment_analysis_of_articles = read_sentiment_analysis(worksheet)
     sentiment_analiisys_per_day = sentiment_analysis_of_articles.groupby('published date')['compound'].mean().reset_index().sort_values('published date')
-    #print(sentiment_analiisys_per_day)
+    print(sentiment_analiisys_per_day)
     print_stock_prices(sentiment_analiisys_per_day)
-    print_revenue()  
 
+def bitstat_parcing():
+    worksheet = get_sheet().get_worksheet(1)
+    kit_actions = get_kit_actions()
+    saved_kit_actions = get_saved_kit_actions(worksheet)
+    # добавляем saved_kit_actions к kit_actions
+    kit_actions = pd.concat([kit_actions, saved_kit_actions])
+    # удаляем дубликаты
+    kit_actions = kit_actions.drop_duplicates()
+    save_kit_actions(worksheet, kit_actions)
+
+def get_saved_kit_actions(worksheet):
+    kit_actions = worksheet.get_all_values()
+    if len(kit_actions) > 1:
+        # Преобразование списка списков в датафрейм, где первый список - заголовки столбцов
+        kit_actions = pd.DataFrame(kit_actions[1:], columns=kit_actions[0])
+        # Преобразование данных в столбце 'compound' в числа
+        kit_actions['amount'] = pd.to_numeric(kit_actions['amount'].str.replace(',', '.'), errors='coerce')
+        kit_actions['amount_usd'] = pd.to_numeric(kit_actions['amount_usd'].str.replace(',', '.'), errors='coerce')
+        kit_actions['btc_rate'] = pd.to_numeric(kit_actions['btc_rate'].str.replace(',', '.'), errors='coerce')
+        kit_actions['btc_transaction_rate'] = pd.to_numeric(kit_actions['btc_transaction_rate'].str.replace(',', '.'), errors='coerce')
+        kit_actions['diff_rate_percentage'] = pd.to_numeric(kit_actions['diff_rate_percentage'].str.replace(',', '.'), errors='coerce')
+    else:
+        kit_actions = pd.DataFrame()
+    
+    return kit_actions
+def save_kit_actions(worksheet, kit_actions):
+    # Создаем список, который содержит заголовки столбцов и данные
+    data_with_headers = [kit_actions.columns.values.tolist()] + kit_actions.values.tolist()
+    # Сохраняем данные в Google Sheets
+    worksheet.update(data_with_headers)
+
+# парсинг ОТСЛЕЖИВАНИЕ ДЕЙСТВИЙ КИТОВ BTC из bitstat.top 
+def get_kit_actions():
+    url = 'https://bitstat.top/whales_transactions.php?l=0&t=btc'
+    soup = get_soup(url)
+
+    data = []
+    for div in soup.select('.cr'):
+        amount = div.select_one('.trx-amount')
+        amount_usd = div.select_one('.trx-amount_usd')
+        ch_btc = div.select_one('.ch_btc span.grey_font.small-font')
+        date_str = div.select_one('.trx-date span').text
+        # Удаление символов '$' и пробелов из строк
+        amount_value = float(amount.text.replace(' ', ''))
+        amount_usd_value = float(amount_usd.text.replace('$', '').replace(' ', ''))
+        btc_rate_value = round(float(ch_btc.text.replace(' ', '')))
+        btc_transaction_rate = round(amount_usd_value / amount_value)
+        diff_rate_percentage = round(100 * (btc_rate_value - btc_transaction_rate) / btc_transaction_rate, 2)
+        #date = dateparser.parse(date_str)
+
+        data.append([amount_value, 
+                     amount_usd_value, 
+                     date_str, 
+                     btc_rate_value, 
+                     btc_transaction_rate,
+                     diff_rate_percentage])
+
+    kit_actions = pd.DataFrame(data, columns=['amount', 
+                                              'amount_usd', 
+                                              'date', 
+                                              'btc_rate', 
+                                              'btc_transaction_rate', 
+                                              'diff_rate_percentage'])
+
+    return kit_actions
+
+def get_soup(URL):
+  headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.80 Safari/537.36',
+      'Content-Type': 'text/html',
+  }
+
+  response = requests.get(URL, headers=headers)
+  soup = BeautifulSoup(response.text, 'html.parser')
+  if response.status_code != 200:
+      print("******** fail ********** ")
+  #print(response.url)
+  #print(response.text)
+  #print('---')
+  return soup
+    
 def read_sentiment_analysis(worksheet):
     sentiment_analysis = worksheet.get_all_values()
     # Преобразование списка списков в датафрейм, где первый список - заголовки столбцов
@@ -43,53 +123,6 @@ def read_sentiment_analysis(worksheet):
     
     return sentiment_analysis
 
-def print_revenue():
-    yahoo_financials = YahooFinancials(TICKET)
-
-    analysts_info = si.get_analysts_info(TICKET)
-    
-    pd.set_option('display.max_columns', None)
-    pd.set_option('display.expand_frame_repr', False)
-
-    Revenue_Estimate = analysts_info['Revenue Estimate']
-    print('-----Revenue Estimate-----')
-    print(Revenue_Estimate)
-
-    Earnings_History = analysts_info['Earnings History']
-    print('-----Earnings History-----') 
-    print(Earnings_History)
-
-
-    income_statement = yahoo_financials.get_financial_stmts('quarterly', 'income')
-    incomeStatementHistoryQuarterly = income_statement['incomeStatementHistoryQuarterly'][TICKET]
-
-    data = []
-    for report in incomeStatementHistoryQuarterly:
-        for date_str in report:
-            date = datetime.strptime(date_str, '%Y-%m-%d')
-            if START_DATE.year <= date.year <= END_DATE.year and 'operatingRevenue' in report[date_str]:
-                revenue_billion = report[date_str]['operatingRevenue'] / 1_000_000_000
-                data.append((date, revenue_billion))
-
-    # Создаем DataFrame из списка кортежей
-    df = pd.DataFrame(data, columns=['Date', 'Revenue']).sort_values('Date')
-
-    print('-----Revenue-----')
-    print(df)
-
-    # очистить значения на графике
-    plt.cla()
-    if not df.empty:
-        plt.bar(df['Date'], df['Revenue'], color='green', width=20)
-        # чтобы на графике были даты только за те данные которые есть
-        plt.xticks(df['Date'])
-        plt.xlim(df['Date'].min() - pd.Timedelta(days=1), df['Date'].max() + pd.Timedelta(days=1))
-        # Установка форматтера для оси X
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter(DATE_FORMAT))
-    plt.xlabel('Date')
-    plt.ylabel('Revenue (in billions)')
-    plt.title('Quarterly Revenue')
-    plt.savefig('revenue.png')
     
 def print_stock_prices(sentiment_data):
     # Получаем данные о ценах акций 
@@ -197,4 +230,5 @@ def get_sentiment_analysis_of_articles(articles):
     sentiment_analysis_of_articles = pd.DataFrame(data, columns=['published date', 'publisher', 'title', 'compound'])
     return sentiment_analysis_of_articles
 
-google_scraper()
+#google_scraper()
+bitstat_parcing()
