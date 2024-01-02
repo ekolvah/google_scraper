@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import matplotlib.dates as mdates
 from bs4 import BeautifulSoup
 import requests
+import dateparser
 
 google_news = GNews()
 DATE_FORMAT = '%Y-%b-%d'
@@ -57,6 +58,8 @@ def get_saved_kit_actions(worksheet):
     
     return kit_actions
 def save_kit_actions(worksheet, kit_actions):
+    # сохраняем данные в формате str потому что в противном случае возникает ошибка при сохранении в Google Sheets TimeStamp
+    kit_actions = kit_actions.astype(str)
     # Создаем список, который содержит заголовки столбцов и данные
     data_with_headers = [kit_actions.columns.values.tolist()] + kit_actions.values.tolist()
     # Сохраняем данные в Google Sheets
@@ -72,18 +75,22 @@ def get_kit_actions():
         amount = div.select_one('.trx-amount')
         amount_usd = div.select_one('.trx-amount_usd')
         ch_btc = div.select_one('.ch_btc span.grey_font.small-font')
-        date_str = div.select_one('.trx-date span').text
-        # Удаление символов '$' и пробелов из строк
+        
+        date_element = div.select_one('.trx-date span')
+        date_html = str(date_element).replace('<br/>', ' ')
+        date_str = BeautifulSoup(date_html, 'html.parser').get_text()
+
+        # форматирование строк в данные 
         amount_value = float(amount.text.replace(' ', ''))
         amount_usd_value = float(amount_usd.text.replace('$', '').replace(' ', ''))
         btc_rate_value = round(float(ch_btc.text.replace(' ', '')))
         btc_transaction_rate = round(amount_usd_value / amount_value)
         diff_rate_percentage = round(100 * (btc_rate_value - btc_transaction_rate) / btc_transaction_rate, 2)
-        #date = dateparser.parse(date_str)
+        date = dateparser.parse(date_str)
 
         data.append([amount_value, 
                      amount_usd_value, 
-                     date_str, 
+                     date, 
                      btc_rate_value, 
                      btc_transaction_rate,
                      diff_rate_percentage])
