@@ -35,6 +35,7 @@ def google_scraper():
 
 def bitstat_parcing():
     worksheet = get_sheet().get_worksheet(1)
+    kit_actions = pd.DataFrame()
     kit_actions = get_parsed_kit_actions()
     saved_kit_actions = get_saved_kit_actions(worksheet)
     # добавляем saved_kit_actions к kit_actions
@@ -72,14 +73,19 @@ def print_kit_actions(kit_actions_per_day):
 
     plt.plot(hist_price_df.index, hist_price_df["close"], label=TICKET)
 
-    # Добавляем результаты анализа тональности на график
+    # Вычисляем смещение
+    offset = hist_price_df["close"].min()*0.98
+
     for index, row in kit_actions_per_day.iterrows():
         date = pd.to_datetime(row.date)
         if START_DATE <= date <= END_DATE:
             if date.strftime(DATE_FORMAT) in hist_price_df.index:
-                compound = float(row['diff_amount'])
-                color = 'g' if compound > 0 else 'r' 
+                # уменьшаю высоту столбцов 
+                diff_amount = float(row['diff_amount']) / offset 
+                color = 'g' if diff_amount > 0 else 'r' 
+                
                 plt.scatter(date, hist_price_df.loc[date.strftime(DATE_FORMAT)]["close"], c=color)
+                plt.bar(date, diff_amount, color=color, bottom=offset)
     # Устанавливаем интервал между метками на оси X
     plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter(DATE_FORMAT))
