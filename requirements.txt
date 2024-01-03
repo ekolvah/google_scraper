@@ -11,3 +11,4 @@ yfinance
 YahooFinancials
 yahoo_fin
 dateparser
+cryptocompare

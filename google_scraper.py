@@ -13,13 +13,14 @@ import matplotlib.dates as mdates
 from bs4 import BeautifulSoup
 import requests
 import dateparser
+import cryptocompare
 
 google_news = GNews()
 DATE_FORMAT = '%Y-%b-%d'
 TICKET = 'BTC'
 KEYWORDS = ['BTC'] 
-START_DATE = datetime.strptime('2022-Apr-01', DATE_FORMAT)
-END_DATE = datetime.strptime('2022-May-01', DATE_FORMAT)
+START_DATE = datetime.strptime('2023-Dec-20', DATE_FORMAT)
+END_DATE = datetime.strptime('2024-Jan-02', DATE_FORMAT)
 
 def google_scraper():
     worksheet = get_sheet().get_worksheet(0)
@@ -34,13 +35,63 @@ def google_scraper():
 
 def bitstat_parcing():
     worksheet = get_sheet().get_worksheet(1)
-    kit_actions = get_kit_actions()
+    kit_actions = get_parsed_kit_actions()
     saved_kit_actions = get_saved_kit_actions(worksheet)
     # добавляем saved_kit_actions к kit_actions
     kit_actions = pd.concat([kit_actions, saved_kit_actions])
     # удаляем дубликаты
     kit_actions = kit_actions.drop_duplicates()
     save_kit_actions(worksheet, kit_actions)
+    kit_actions_per_day = get_kit_actions_per_day(kit_actions)
+    print_kit_actions(kit_actions_per_day)
+
+# группировка по дням и вычисление суммы значения diff_amount за день
+def get_kit_actions_per_day(kit_actions):
+    kit_actions['date'] = pd.to_datetime(kit_actions['date'])
+    kit_actions_per_day = kit_actions.groupby('date')['diff_amount'].sum().reset_index().sort_values('date')
+    print('-----kit_actions_per_day-----')
+    print(kit_actions_per_day)
+    
+    return kit_actions_per_day
+
+def print_kit_actions(kit_actions_per_day):
+    # Вычисляем количество дней между START_DATE и END_DATE
+    days = (END_DATE - START_DATE).days
+
+    # Получаем исторические данные
+    hist_price = cryptocompare.get_historical_price_day(TICKET, currency='USD', limit=days, toTs=END_DATE)
+    
+    # Преобразуем данные в DataFrame
+    hist_price_df = pd.DataFrame(hist_price)
+    # Устанавливаем дату в качестве индекса
+    hist_price_df['time'] = pd.to_datetime(hist_price_df['time'], unit='s')
+    hist_price_df.set_index('time', inplace=True, drop=False)
+
+    print('-----hist_price_df-----')
+    print(hist_price_df)
+
+    plt.plot(hist_price_df.index, hist_price_df["close"], label=TICKET)
+
+    # Добавляем результаты анализа тональности на график
+    for index, row in kit_actions_per_day.iterrows():
+        date = pd.to_datetime(row.date)
+        if START_DATE <= date <= END_DATE:
+            if date.strftime(DATE_FORMAT) in hist_price_df.index:
+                compound = float(row['diff_amount'])
+                color = 'g' if compound > 0 else 'r' 
+                plt.scatter(date, hist_price_df.loc[date.strftime(DATE_FORMAT)]["close"], c=color)
+    # Устанавливаем интервал между метками на оси X
+    plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter(DATE_FORMAT))
+
+    #plt.xticks(nvda.index)
+    plt.title("Цены акций " + TICKET )
+    plt.xlabel("Дата")
+    plt.ylabel("Цена")
+    plt.legend()
+
+    # Сохраняем график в файл
+    plt.savefig('BTC_prices.png')
 
 def get_saved_kit_actions(worksheet):
     kit_actions = worksheet.get_all_values()
@@ -48,11 +99,12 @@ def get_saved_kit_actions(worksheet):
         # Преобразование списка списков в датафрейм, где первый список - заголовки столбцов
         kit_actions = pd.DataFrame(kit_actions[1:], columns=kit_actions[0])
         # Преобразование данных в столбце 'compound' в числа
+        kit_actions['date_time'] = pd.to_datetime(kit_actions['date_time'])
         kit_actions['amount'] = pd.to_numeric(kit_actions['amount'].str.replace(',', '.'), errors='coerce')
         kit_actions['amount_usd'] = pd.to_numeric(kit_actions['amount_usd'].str.replace(',', '.'), errors='coerce')
         kit_actions['btc_rate'] = pd.to_numeric(kit_actions['btc_rate'].str.replace(',', '.'), errors='coerce')
         kit_actions['btc_transaction_rate'] = pd.to_numeric(kit_actions['btc_transaction_rate'].str.replace(',', '.'), errors='coerce')
-        kit_actions['diff_rate_percentage'] = pd.to_numeric(kit_actions['diff_rate_percentage'].str.replace(',', '.'), errors='coerce')
+        kit_actions['diff_amount'] = pd.to_numeric(kit_actions['diff_amount'].str.replace(',', '.'), errors='coerce')
     else:
         kit_actions = pd.DataFrame()
     
@@ -66,7 +118,7 @@ def save_kit_actions(worksheet, kit_actions):
     worksheet.update(data_with_headers)
 
 # парсинг ОТСЛЕЖИВАНИЕ ДЕЙСТВИЙ КИТОВ BTC из bitstat.top 
-def get_kit_actions():
+def get_parsed_kit_actions():
     url = 'https://bitstat.top/whales_transactions.php?l=0&t=btc'
     soup = get_soup(url)
 
@@ -85,22 +137,26 @@ def get_kit_actions():
         amount_usd_value = float(amount_usd.text.replace('$', '').replace(' ', ''))
         btc_rate_value = round(float(ch_btc.text.replace(' ', '')))
         btc_transaction_rate = round(amount_usd_value / amount_value)
-        diff_rate_percentage = round(100 * (btc_rate_value - btc_transaction_rate) / btc_transaction_rate, 2)
-        date = dateparser.parse(date_str)
+        diff_amount = round((btc_rate_value - btc_transaction_rate)*amount_value)
+        
+        date_time = dateparser.parse(date_str)
+        date = date_time.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        data.append([amount_value, 
+        data.append([date_time,
+                     amount_value, 
                      amount_usd_value, 
                      date, 
                      btc_rate_value, 
                      btc_transaction_rate,
-                     diff_rate_percentage])
+                     diff_amount])
 
-    kit_actions = pd.DataFrame(data, columns=['amount', 
+    kit_actions = pd.DataFrame(data, columns=['date_time',
+                                              'amount', 
                                               'amount_usd', 
                                               'date', 
                                               'btc_rate', 
                                               'btc_transaction_rate', 
-                                              'diff_rate_percentage'])
+                                              'diff_amount'])
 
     return kit_actions
 
