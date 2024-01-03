@@ -119,36 +119,41 @@ def save_kit_actions(worksheet, kit_actions):
 
 # парсинг ОТСЛЕЖИВАНИЕ ДЕЙСТВИЙ КИТОВ BTC из bitstat.top 
 def get_parsed_kit_actions():
-    url = 'https://bitstat.top/whales_transactions.php?l=0&t=btc'
-    soup = get_soup(url)
+    num_pages = 50
+    base_url = 'https://bitstat.top/whales_transactions.php?page={}&t=btc&l=0'
+    urls = [base_url.format(i) for i in range(1, num_pages + 1)]
 
     data = []
-    for div in soup.select('.cr'):
-        amount = div.select_one('.trx-amount')
-        amount_usd = div.select_one('.trx-amount_usd')
-        ch_btc = div.select_one('.ch_btc span.grey_font.small-font')
-        
-        date_element = div.select_one('.trx-date span')
-        date_html = str(date_element).replace('<br/>', ' ')
-        date_str = BeautifulSoup(date_html, 'html.parser').get_text()
+    for url in urls:
+        soup = get_soup(url)
+        print(url)
 
-        # форматирование строк в данные 
-        amount_value = float(amount.text.replace(' ', ''))
-        amount_usd_value = float(amount_usd.text.replace('$', '').replace(' ', ''))
-        btc_rate_value = round(float(ch_btc.text.replace(' ', '')))
-        btc_transaction_rate = round(amount_usd_value / amount_value)
-        diff_amount = round((btc_rate_value - btc_transaction_rate)*amount_value)
-        
-        date_time = dateparser.parse(date_str)
-        date = date_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        for div in soup.select('.cr'):
+            amount = div.select_one('.trx-amount')
+            amount_usd = div.select_one('.trx-amount_usd')
+            ch_btc = div.select_one('.ch_btc span.grey_font.small-font')
+            
+            date_element = div.select_one('.trx-date span')
+            date_html = str(date_element).replace('<br/>', ' ')
+            date_str = BeautifulSoup(date_html, 'html.parser').get_text()
 
-        data.append([date_time,
-                     amount_value, 
-                     amount_usd_value, 
-                     date, 
-                     btc_rate_value, 
-                     btc_transaction_rate,
-                     diff_amount])
+            # форматирование строк в данные 
+            amount_value = float(amount.text.replace(' ', ''))
+            amount_usd_value = float(amount_usd.text.replace('$', '').replace(' ', ''))
+            btc_rate_value = round(float(ch_btc.text.replace(' ', '')))
+            btc_transaction_rate = round(amount_usd_value / amount_value)
+            diff_amount = round((btc_rate_value - btc_transaction_rate)*amount_value)
+            
+            date_time = dateparser.parse(date_str)
+            date = date_time.replace(hour=0, minute=0, second=0, microsecond=0)
+
+            data.append([date_time,
+                         amount_value, 
+                         amount_usd_value, 
+                         date, 
+                         btc_rate_value, 
+                         btc_transaction_rate,
+                         diff_amount])
 
     kit_actions = pd.DataFrame(data, columns=['date_time',
                                               'amount', 
@@ -159,7 +164,6 @@ def get_parsed_kit_actions():
                                               'diff_amount'])
 
     return kit_actions
-
 def get_soup(URL):
   headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.80 Safari/537.36',
