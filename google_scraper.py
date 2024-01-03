@@ -20,7 +20,7 @@ DATE_FORMAT = '%Y-%b-%d'
 TICKET = 'BTC'
 KEYWORDS = ['BTC'] 
 START_DATE = datetime.strptime('2023-Dec-20', DATE_FORMAT)
-END_DATE = datetime.strptime('2024-Jan-02', DATE_FORMAT)
+END_DATE = datetime.now()
 
 def google_scraper():
     worksheet = get_sheet().get_worksheet(0)
