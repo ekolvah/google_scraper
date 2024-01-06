@@ -18,6 +18,6 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run script
-        run: bitstat_scraper.py
+        run: python bitstat_scraper.py
 env:
   CREDENTIALS: ${{ secrets.CREDENTIALS }}
