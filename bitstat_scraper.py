@@ -22,7 +22,7 @@ END_DATE = datetime.now()
 def bitstat_scraper():
     worksheet = get_sheet().get_worksheet(1)
     kit_actions = pd.DataFrame()
-    #kit_actions = get_parsed_kit_actions()
+    kit_actions = get_parsed_kit_actions()
     saved_kit_actions = get_saved_kit_actions(worksheet)
     # добавляем saved_kit_actions к kit_actions
     kit_actions = pd.concat([kit_actions, saved_kit_actions])
