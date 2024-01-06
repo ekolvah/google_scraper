@@ -14,6 +14,7 @@ import cryptocompare
 
 google_news = GNews()
 DATE_FORMAT = '%Y-%b-%d'
+PLT_DATE_FORMAT = '%b-%d'
 TICKET = 'BTC'
 KEYWORDS = ['BTC'] 
 START_DATE = datetime.strptime('2023-Dec-20', DATE_FORMAT)
@@ -21,8 +22,10 @@ END_DATE = datetime.now()
 
 def bitstat_scraper():
     worksheet = get_sheet().get_worksheet(1)
-    kit_actions = pd.DataFrame()
-    kit_actions = get_parsed_kit_actions()
+    if os.getenv('RUN_IN_GITHUB_ACTION') == 'true':
+        kit_actions = get_parsed_kit_actions()
+    else:
+        kit_actions = pd.DataFrame() 
     saved_kit_actions = get_saved_kit_actions(worksheet)
     # добавляем saved_kit_actions к kit_actions
     kit_actions = pd.concat([kit_actions, saved_kit_actions])
@@ -73,8 +76,8 @@ def print_kit_actions(kit_actions_per_day):
                 plt.scatter(date, hist_price_df.loc[date.strftime(DATE_FORMAT)]["close"], c=color)
                 plt.bar(date, diff_amount, color=color, bottom=offset)
     # Устанавливаем интервал между метками на оси X
-    plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter(DATE_FORMAT))
+    plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=3))
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter(PLT_DATE_FORMAT))
 
     #plt.xticks(nvda.index)
     plt.title("Цены акций " + TICKET )
